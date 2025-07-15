@@ -46,7 +46,7 @@ fn truncate(comptime T: type, comptime field: anytype, x: anytype) std.meta.fiel
 }
 
 
-fn statAt(parent: std.fs.Dir, name: [:0]const u8, follow: bool, symlink: *bool) !sink.Stat {
+pub fn statAt(parent: std.fs.Dir, name: [:0]const u8, follow: bool, symlink: ?*bool) !sink.Stat {
     // std.posix.fstatatZ() in Zig 0.14 is not suitable due to https://github.com/ziglang/zig/issues/23463
     var stat: std.c.Stat = undefined;
     if (std.c.fstatat(parent.fd, name, &stat, if (follow) 0 else std.c.AT.SYMLINK_NOFOLLOW) != 0) {
@@ -58,7 +58,7 @@ fn statAt(parent: std.fs.Dir, name: [:0]const u8, follow: bool, symlink: *bool) 
             else => error.Unexpected,
         };
     }
-    symlink.* = std.c.S.ISLNK(stat.mode);
+    if (symlink) |s| s.* = std.c.S.ISLNK(stat.mode);
     return sink.Stat{
         .etype =
             if (std.c.S.ISDIR(stat.mode)) .dir

@@ -6,6 +6,9 @@ const main = @import("main.zig");
 const model = @import("model.zig");
 const ui = @import("ui.zig");
 const browser = @import("browser.zig");
+const scan = @import("scan.zig");
+const sink = @import("sink.zig");
+const mem_sink = @import("mem_sink.zig");
 const util = @import("util.zig");
 const c = @import("c.zig").c;
 
@@ -68,6 +71,57 @@ fn deleteItem(dir: std.fs.Dir, path: [:0]const u8, ptr: *align(1) ?*model.Entry)
     return false;
 }
 
+// Returns true if the item has been deleted successfully.
+fn deleteCmd(path: [:0]const u8, ptr: *align(1) ?*model.Entry) bool {
+    {
+        var env = std.process.getEnvMap(main.allocator) catch unreachable;
+        defer env.deinit();
+        env.put("NCDU_DELETE_PATH", path) catch unreachable;
+
+        // Since we're passing the path as an environment variable and go through
+        // the shell anyway, we can refer to the variable and avoid error-prone
+        // shell escaping.
+        const cmd = std.fmt.allocPrint(main.allocator, "{s} \"$NCDU_DELETE_PATH\"", .{main.config.delete_command}) catch unreachable;
+        defer main.allocator.free(cmd);
+        ui.runCmd(&.{"/bin/sh", "-c", cmd}, null, &env, true);
+    }
+
+    const stat = scan.statAt(std.fs.cwd(), path, false, null) catch {
+        // Stat failed. Would be nice to display an error if it's not
+        // 'FileNotFound', but w/e, let's just assume the item has been
+        // deleted as expected.
+        ptr.*.?.zeroStats(parent);
+        ptr.* = ptr.*.?.next.ptr;
+        return true;
+    };
+
+    // If either old or new entry is not a dir, remove & re-add entry in the in-memory tree.
+    if (ptr.*.?.pack.etype != .dir or stat.etype != .dir) {
+        ptr.*.?.zeroStats(parent);
+        const e = model.Entry.create(main.allocator, stat.etype, main.config.extended and !stat.ext.isEmpty(), ptr.*.?.name());
+        e.next.ptr = ptr.*.?.next.ptr;
+        mem_sink.statToEntry(&stat, e, parent);
+        ptr.* = e;
+
+        var it : ?*model.Dir = parent;
+        while (it) |p| : (it = p.parent) {
+            if (stat.etype != .link) {
+                p.entry.pack.blocks +|= e.pack.blocks;
+                p.entry.size +|= e.size;
+            }
+            p.items +|= 1;
+        }
+    }
+
+    // If new entry is a dir, recursively scan.
+    if (ptr.*.?.dir()) |d| {
+        main.state = .refresh;
+        sink.global.sink = .mem;
+        mem_sink.global.root = d;
+    }
+    return false;
+}
+
 // Returns the item that should be selected in the browser.
 pub fn delete() ?*model.Entry {
     while (main.state == .delete and state == .confirm)
@@ -89,23 +143,39 @@ pub fn delete() ?*model.Entry {
         path.append('/') catch unreachable;
     path.appendSlice(entry.name()) catch unreachable;
 
-    _ = deleteItem(std.fs.cwd(), util.arrayListBufZ(&path), it);
-    model.inodes.addAllStats();
-    return if (it.* == e) e else next_sel;
+    if (main.config.delete_command.len == 0) {
+        _ = deleteItem(std.fs.cwd(), util.arrayListBufZ(&path), it);
+        model.inodes.addAllStats();
+        return if (it.* == e) e else next_sel;
+    } else {
+        const isdel = deleteCmd(util.arrayListBufZ(&path), it);
+        model.inodes.addAllStats();
+        return if (isdel) next_sel else it.*;
+    }
 }
 
 fn drawConfirm() void {
     browser.draw();
     const box = ui.Box.create(6, 60, "Confirm delete");
     box.move(1, 2);
-    ui.addstr("Are you sure you want to delete \"");
-    ui.addstr(ui.shorten(ui.toUtf8(entry.name()), 21));
-    ui.addch('"');
-    if (entry.pack.etype != .dir)
-        ui.addch('?')
-    else {
-        box.move(2, 18);
-        ui.addstr("and all of its contents?");
+    if (main.config.delete_command.len == 0) {
+        ui.addstr("Are you sure you want to delete \"");
+        ui.addstr(ui.shorten(ui.toUtf8(entry.name()), 21));
+        ui.addch('"');
+        if (entry.pack.etype != .dir)
+            ui.addch('?')
+        else {
+            box.move(2, 18);
+            ui.addstr("and all of its contents?");
+        }
+    } else {
+        ui.addstr("Are you sure you want to run \"");
+        ui.addstr(ui.shorten(ui.toUtf8(main.config.delete_command), 25));
+        ui.addch('"');
+        box.move(2, 4);
+        ui.addstr("on \"");
+        ui.addstr(ui.shorten(ui.toUtf8(entry.name()), 50));
+        ui.addch('"');
     }
 
     box.move(4, 15);

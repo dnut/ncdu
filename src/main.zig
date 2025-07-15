@@ -114,6 +114,7 @@ pub const config = struct {
     pub var confirm_quit: bool = false;
     pub var confirm_delete: bool = true;
     pub var ignore_delete_errors: bool = false;
+    pub var delete_command: [:0]const u8 = "";
 };
 
 pub var state: enum { scan, browse, refresh, shell, delete } = .scan;
@@ -306,6 +307,7 @@ fn argConfig(args: *Args, opt: Args.Option, infile: bool) !void {
     else if (opt.is("--no-confirm-quit")) config.confirm_quit = false
     else if (opt.is("--confirm-delete")) config.confirm_delete = true
     else if (opt.is("--no-confirm-delete")) config.confirm_delete = false
+    else if (opt.is("--delete-command")) config.delete_command = allocator.dupeZ(u8, try args.arg()) catch unreachable
     else if (opt.is("--color")) {
         const val = try args.arg();
         if (std.mem.eql(u8, val, "off")) config.ui_color = .off
@@ -428,64 +430,13 @@ fn help() noreturn {
     \\  --group-directories-first  Sort directories before files
     \\  --confirm-quit             Ask confirmation before quitting ncdu
     \\  --no-confirm-delete        Don't ask confirmation before deletion
+    \\  --delete-command CMD       Command to run for file deletion
     \\  --color SCHEME             off / dark / dark-bg
     \\
     \\Refer to `man ncdu` for more information.
     \\
     ) catch {};
     std.process.exit(0);
-}
-
-
-fn spawnShell() void {
-    ui.deinit();
-    defer ui.init();
-
-    var env = std.process.getEnvMap(allocator) catch unreachable;
-    defer env.deinit();
-    // NCDU_LEVEL can only count to 9, keeps the implementation simple.
-    if (env.get("NCDU_LEVEL")) |l|
-        env.put("NCDU_LEVEL", if (l.len == 0) "1" else switch (l[0]) {
-            '0'...'8' => |d| &[1] u8{d+1},
-            '9' => "9",
-            else => "1"
-        }) catch unreachable
-    else
-        env.put("NCDU_LEVEL", "1") catch unreachable;
-
-    const shell = std.posix.getenvZ("NCDU_SHELL") orelse std.posix.getenvZ("SHELL") orelse "/bin/sh";
-    var child = std.process.Child.init(&.{shell}, allocator);
-    child.cwd = browser.dir_path;
-    child.env_map = &env;
-
-    const stdin = std.io.getStdIn();
-    const stderr = std.io.getStdErr();
-    const term = child.spawnAndWait() catch |e| blk: {
-        stderr.writer().print(
-            "Error spawning shell: {s}\n\nPress enter to continue.\n",
-            .{ ui.errorString(e) }
-        ) catch {};
-        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
-        break :blk std.process.Child.Term{ .Exited = 0 };
-    };
-    if (term != .Exited) {
-        const n = switch (term) {
-            .Exited  => "status",
-            .Signal  => "signal",
-            .Stopped => "stopped",
-            .Unknown => "unknown",
-        };
-        const v = switch (term) {
-            .Exited  => |v| v,
-            .Signal  => |v| v,
-            .Stopped => |v| v,
-            .Unknown => |v| v,
-        };
-        stderr.writer().print(
-            "Shell returned with {s} code {}.\n\nPress enter to continue.\n", .{ n, v }
-        ) catch {};
-        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
-    }
 }
 
 
@@ -671,13 +622,18 @@ pub fn main() void {
                 browser.loadDir(0);
             },
             .shell => {
-                spawnShell();
+                const shell = std.posix.getenvZ("NCDU_SHELL") orelse std.posix.getenvZ("SHELL") orelse "/bin/sh";
+                var env = std.process.getEnvMap(allocator) catch unreachable;
+                defer env.deinit();
+                ui.runCmd(&.{shell}, browser.dir_path, &env, false);
                 state = .browse;
             },
             .delete => {
                 const next = delete.delete();
-                state = .browse;
-                browser.loadDir(if (next) |n| n.nameHash() else 0);
+                if (state != .refresh) {
+                    state = .browse;
+                    browser.loadDir(if (next) |n| n.nameHash() else 0);
+                }
             },
             else => handleEvent(true, false)
         }

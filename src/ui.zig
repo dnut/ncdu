@@ -642,3 +642,48 @@ pub fn getch(block: bool) i32 {
     die("Error reading keyboard input, assuming TTY has been lost.\n(Potentially nonsensical error message: {s})\n",
         .{ c.strerror(@intFromEnum(std.posix.errno(-1))) });
 }
+
+
+pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMap, reporterr: bool) void {
+    deinit();
+    defer init();
+
+    // NCDU_LEVEL can only count to 9, keeps the implementation simple.
+    if (env.get("NCDU_LEVEL")) |l|
+        env.put("NCDU_LEVEL", if (l.len == 0) "1" else switch (l[0]) {
+            '0'...'8' => |d| &[1] u8{d+1},
+            '9' => "9",
+            else => "1"
+        }) catch unreachable
+    else
+        env.put("NCDU_LEVEL", "1") catch unreachable;
+
+    var child = std.process.Child.init(cmd, main.allocator);
+    child.cwd = cwd;
+    child.env_map = env;
+
+    const stdin = std.io.getStdIn();
+    const stderr = std.io.getStdErr();
+    const term = child.spawnAndWait() catch |e| blk: {
+        stderr.writer().print(
+            "Error running command: {s}\n\nPress enter to continue.\n",
+            .{ ui.errorString(e) }
+        ) catch {};
+        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
+        break :blk std.process.Child.Term{ .Exited = 0 };
+    };
+
+    const n = switch (term) {
+        .Exited  => "error",
+        .Signal  => "signal",
+        .Stopped => "stopped",
+        .Unknown => "unknown",
+    };
+    const v = switch (term) { inline else => |v| v };
+    if (term != .Exited or (reporterr and v != 0)) {
+        stderr.writer().print(
+            "\nCommand returned with {s} code {}.\nPress enter to continue.\n", .{ n, v }
+        ) catch {};
+        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
+    }
+}
