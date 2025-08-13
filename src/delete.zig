@@ -189,6 +189,11 @@ fn drawConfirm() void {
     box.move(4, 31);
     ui.style(if (confirm == .ignore) .sel else .default);
     ui.addstr("don't ask me again");
+    box.move(4, switch (confirm) {
+        .yes    => 15,
+        .no     => 25,
+        .ignore => 31
+    });
 }
 
 fn drawProgress() void {
