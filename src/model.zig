@@ -109,7 +109,8 @@ pub const Entry = extern struct {
     fn alloc(comptime T: type, allocator: std.mem.Allocator, etype: EType, isext: bool, ename: []const u8) *Entry {
         const size = (if (isext) @as(usize, @sizeOf(Ext)) else 0) + @sizeOf(T) + ename.len + 1;
         var ptr = blk: while (true) {
-            if (allocator.allocWithOptions(u8, size, 1, null)) |p| break :blk p
+            const alignment = if (@typeInfo(@TypeOf(std.mem.Allocator.allocWithOptions)).@"fn".params[3].type == ?u29) 1 else std.mem.Alignment.@"1";
+            if (allocator.allocWithOptions(u8, size, alignment, null)) |p| break :blk p
             else |_| {}
             ui.oom();
         };

@@ -292,7 +292,7 @@ fn drawConsole() void {
         var ansi: ?bool = null;
         var lines_written: usize = 0;
     };
-    const stderr = std.io.getStdErr();
+    const stderr = if (@hasDecl(std.io, "getStdErr")) std.io.getStdErr() else std.fs.File.stderr();
     const ansi = st.ansi orelse blk: {
         const t = stderr.supportsAnsiEscapeCodes();
         st.ansi = t;

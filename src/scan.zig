@@ -91,7 +91,7 @@ fn isCacheDir(dir: std.fs.Dir) bool {
     const f = dir.openFileZ("CACHEDIR.TAG", .{}) catch return false;
     defer f.close();
     var buf: [sig.len]u8 = undefined;
-    const len = f.reader().readAll(&buf) catch return false;
+    const len = f.readAll(&buf) catch return false;
     return len == sig.len and std.mem.eql(u8, &buf, sig);
 }
 

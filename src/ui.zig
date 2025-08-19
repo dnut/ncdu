@@ -17,8 +17,7 @@ pub var cols: u32 = undefined;
 
 pub fn die(comptime fmt: []const u8, args: anytype) noreturn {
     deinit();
-    const stderr = std.io.getStdErr();
-    stderr.writer().print(fmt, args) catch {};
+    std.debug.print(fmt, args);
     std.process.exit(1);
 }
 
@@ -26,6 +25,8 @@ pub fn quit() noreturn {
     deinit();
     std.process.exit(0);
 }
+
+const sleep = if (@hasDecl(std.time, "sleep")) std.time.sleep else std.Thread.sleep;
 
 // Should be called when malloc fails. Will show a message to the user, wait
 // for a second and return to give it another try.
@@ -41,14 +42,13 @@ pub fn oom() void {
     if (main_thread == std.Thread.getCurrentId()) {
         const haveui = inited;
         deinit();
-        const stderr = std.io.getStdErr();
-        stderr.writeAll("\x1b7\x1b[JOut of memory, trying again in 1 second. Hit Ctrl-C to abort.\x1b8") catch {};
-        std.time.sleep(std.time.ns_per_s);
+        std.debug.print("\x1b7\x1b[JOut of memory, trying again in 1 second. Hit Ctrl-C to abort.\x1b8", .{});
+        sleep(std.time.ns_per_s);
         if (haveui)
             init();
     } else {
         _ = oom_threads.fetchAdd(1, .monotonic);
-        std.time.sleep(std.time.ns_per_s);
+        sleep(std.time.ns_per_s);
         _ = oom_threads.fetchSub(1, .monotonic);
     }
 }
@@ -335,8 +335,7 @@ fn updateSize() void {
 fn clearScr() void {
     // Send a "clear from cursor to end of screen" instruction, to clear a
     // potential line left behind from scanning in -1 mode.
-    const stderr = std.io.getStdErr();
-    stderr.writeAll("\x1b[J") catch {};
+    std.debug.print("\x1b[J", .{});
 }
 
 pub fn init() void {
@@ -634,7 +633,7 @@ pub fn getch(block: bool) i32 {
         }
         if (ch == c.ERR) {
             if (!block) return 0;
-            std.time.sleep(10*std.time.ns_per_ms);
+            sleep(10*std.time.ns_per_ms);
             continue;
         }
         return ch;
@@ -643,6 +642,15 @@ pub fn getch(block: bool) i32 {
         .{ c.strerror(@intFromEnum(std.posix.errno(-1))) });
 }
 
+fn waitInput() void {
+    if (@hasDecl(std.io, "getStdIn")) {
+        std.io.getStdIn().reader().skipUntilDelimiterOrEof('\n') catch unreachable;
+    } else {
+        var buf: [512]u8 = undefined;
+        var rd = std.fs.File.stdin().reader(&buf);
+        _ = rd.interface.discardDelimiterExclusive('\n') catch unreachable;
+    }
+}
 
 pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMap, reporterr: bool) void {
     deinit();
@@ -662,14 +670,9 @@ pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMa
     child.cwd = cwd;
     child.env_map = env;
 
-    const stdin = std.io.getStdIn();
-    const stderr = std.io.getStdErr();
     const term = child.spawnAndWait() catch |e| blk: {
-        stderr.writer().print(
-            "Error running command: {s}\n\nPress enter to continue.\n",
-            .{ ui.errorString(e) }
-        ) catch {};
-        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
+        std.debug.print("Error running command: {s}\n\nPress enter to continue.\n", .{ ui.errorString(e) });
+        waitInput();
         break :blk std.process.Child.Term{ .Exited = 0 };
     };
 
@@ -681,9 +684,7 @@ pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMa
     };
     const v = switch (term) { inline else => |v| v };
     if (term != .Exited or (reporterr and v != 0)) {
-        stderr.writer().print(
-            "\nCommand returned with {s} code {}.\nPress enter to continue.\n", .{ n, v }
-        ) catch {};
-        stdin.reader().skipUntilDelimiterOrEof('\n') catch unreachable;
+        std.debug.print("\nCommand returned with {s} code {}.\nPress enter to continue.\n", .{ n, v });
+        waitInput();
     }
 }

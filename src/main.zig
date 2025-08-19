@@ -118,6 +118,9 @@ pub const config = struct {
 
 pub var state: enum { scan, browse, refresh, shell, delete } = .scan;
 
+const stdin = if (@hasDecl(std.io, "getStdIn")) std.io.getStdIn() else std.fs.File.stdin();
+const stdout = if (@hasDecl(std.io, "getStdOut")) std.io.getStdOut() else std.fs.File.stdout();
+
 // Simple generic argument parser, supports getopt_long() style arguments.
 const Args = struct {
     lst: []const [:0]const u8,
@@ -327,19 +330,13 @@ fn tryReadArgsFile(path: [:0]const u8) void {
     };
     defer f.close();
 
-    var rd_ = std.io.bufferedReader(f.reader());
-    const rd = rd_.reader();
-
     var line_buf: [4096]u8 = undefined;
-    var line_fbs = std.io.fixedBufferStream(&line_buf);
-    const line_writer = line_fbs.writer();
+    var line_rd = util.LineReader.init(f, &line_buf);
 
-    while (true) : (line_fbs.reset()) {
-        rd.streamUntilDelimiter(line_writer, '\n', line_buf.len) catch |err| switch (err) {
-            error.EndOfStream => if (line_fbs.getPos() catch unreachable == 0) break,
-            else => |e| ui.die("Error reading from {s}: {s}\nRun with --ignore-config to skip reading config files.\n", .{ path, ui.errorString(e) }),
-        };
-        const line_ = line_fbs.getWritten();
+    while (true) {
+        const line_ = (line_rd.read() catch |e|
+            ui.die("Error reading from {s}: {s}\nRun with --ignore-config to skip reading config files.\n", .{ path, ui.errorString(e) })
+        ) orelse break;
 
         var argc: usize = 0;
         var ignerror = false;
@@ -374,13 +371,11 @@ fn tryReadArgsFile(path: [:0]const u8) void {
 }
 
 fn version() noreturn {
-    const stdout = std.io.getStdOut();
     stdout.writeAll("ncdu " ++ program_version ++ "\n") catch {};
     std.process.exit(0);
 }
 
 fn help() noreturn {
-    const stdout = std.io.getStdOut();
     stdout.writeAll(
     \\ncdu <options> <directory>
     \\
@@ -443,19 +438,9 @@ fn readExcludeFile(path: [:0]const u8) !void {
     const f = try std.fs.cwd().openFileZ(path, .{});
     defer f.close();
 
-    var rd_ = std.io.bufferedReader(f.reader());
-    const rd = rd_.reader();
-
     var line_buf: [4096]u8 = undefined;
-    var line_fbs = std.io.fixedBufferStream(&line_buf);
-    const line_writer = line_fbs.writer();
-
-    while (true) : (line_fbs.reset()) {
-        rd.streamUntilDelimiter(line_writer, '\n', line_buf.len) catch |err| switch (err) {
-            error.EndOfStream => if (line_fbs.getPos() catch unreachable == 0) break,
-            else => |e| return e,
-        };
-        const line = line_fbs.getWritten();
+    var line_rd = util.LineReader.init(f, &line_buf);
+    while (try line_rd.read()) |line| {
         if (line.len > 0)
             exclude.addPattern(line);
     }
@@ -463,12 +448,12 @@ fn readExcludeFile(path: [:0]const u8) !void {
 
 fn readImport(path: [:0]const u8) !void {
     const fd =
-        if (std.mem.eql(u8, "-", path)) std.io.getStdIn()
+        if (std.mem.eql(u8, "-", path)) stdin
         else try std.fs.cwd().openFileZ(path, .{});
     errdefer fd.close();
 
     var buf: [8]u8 = undefined;
-    try fd.reader().readNoEof(&buf);
+    if (8 != try fd.readAll(&buf)) return error.EndOfStream;
     if (std.mem.eql(u8, &buf, bin_export.SIGNATURE)) {
         try bin_reader.open(fd);
         config.binreader = true;
@@ -550,8 +535,6 @@ pub fn main() void {
     if (@import("builtin").os.tag != .linux and config.exclude_kernfs)
         ui.die("The --exclude-kernfs flag is currently only supported on Linux.\n", .{});
 
-    const stdin = std.io.getStdIn();
-    const stdout = std.io.getStdOut();
     const out_tty = stdout.isTty();
     const in_tty = stdin.isTty();
     if (config.scan_ui == null) {
