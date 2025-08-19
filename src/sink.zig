@@ -451,25 +451,28 @@ pub fn draw() void {
     switch (main.config.scan_ui.?) {
         .none => {},
         .line => drawConsole(),
-        .full => switch (global.state) {
-            .done => {},
-            .err => drawError(),
-            .zeroing => {
-                const box = ui.Box.create(4, ui.cols -| 5, "Initializing");
-                box.move(2, 2);
-                ui.addstr("Clearing directory counts...");
-            },
-            .hlcnt => {
-                const box = ui.Box.create(4, ui.cols -| 5, "Finalizing");
-                box.move(2, 2);
-                ui.addstr("Counting hardlinks... ");
-                if (model.inodes.add_total > 0) {
-                    ui.addnum(.default, model.inodes.add_done);
-                    ui.addstr(" / ");
-                    ui.addnum(.default, model.inodes.add_total);
-                }
-            },
-            .running => drawProgress(),
+        .full => {
+            ui.init();
+            switch (global.state) {
+                .done => {},
+                .err => drawError(),
+                .zeroing => {
+                    const box = ui.Box.create(4, ui.cols -| 5, "Initializing");
+                    box.move(2, 2);
+                    ui.addstr("Clearing directory counts...");
+                },
+                .hlcnt => {
+                    const box = ui.Box.create(4, ui.cols -| 5, "Finalizing");
+                    box.move(2, 2);
+                    ui.addstr("Counting hardlinks... ");
+                    if (model.inodes.add_total > 0) {
+                        ui.addnum(.default, model.inodes.add_done);
+                        ui.addstr(" / ");
+                        ui.addnum(.default, model.inodes.add_total);
+                    }
+                },
+                .running => drawProgress(),
+            }
         },
     }
 }
