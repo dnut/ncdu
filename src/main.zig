@@ -80,7 +80,6 @@ pub const config = struct {
     pub var follow_symlinks: bool = false;
     pub var exclude_caches: bool = false;
     pub var exclude_kernfs: bool = false;
-    pub var exclude_patterns: std.ArrayList([:0]const u8) = std.ArrayList([:0]const u8).init(allocator);
     pub var threads: usize = 1;
     pub var complevel: u8 = 4;
     pub var compress: bool = false;
@@ -610,10 +609,10 @@ pub fn main() void {
     while (true) {
         switch (state) {
             .refresh => {
-                var full_path = std.ArrayList(u8).init(allocator);
-                defer full_path.deinit();
-                mem_sink.global.root.?.fmtPath(true, &full_path);
-                scan.scan(util.arrayListBufZ(&full_path)) catch {
+                var full_path: std.ArrayListUnmanaged(u8) = .empty;
+                defer full_path.deinit(allocator);
+                mem_sink.global.root.?.fmtPath(allocator, true, &full_path);
+                scan.scan(util.arrayListBufZ(&full_path, allocator)) catch {
                     sink.global.last_error = allocator.dupeZ(u8, full_path.items) catch unreachable;
                     sink.global.state = .err;
                     while (state == .refresh) handleEvent(true, true);

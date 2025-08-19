@@ -184,7 +184,7 @@ const Thread = struct {
     thread_num: usize,
     sink: *sink.Thread,
     state: *State,
-    stack: std.ArrayList(*Dir) = std.ArrayList(*Dir).init(main.allocator),
+    stack: std.ArrayListUnmanaged(*Dir) = .empty,
     thread: std.Thread = undefined,
     namebuf: [4096]u8 = undefined,
 
@@ -265,13 +265,13 @@ const Thread = struct {
         const s = dir.sink.addDir(t.sink, name, &stat);
         const ndir = Dir.create(edir, stat.dev, dir.pat.enter(name), s);
         if (main.config.threads == 1 or !t.state.tryPush(ndir))
-            t.stack.append(ndir) catch unreachable;
+            t.stack.append(main.allocator, ndir) catch unreachable;
     }
 
     fn run(t: *Thread) void {
-        defer t.stack.deinit();
+        defer t.stack.deinit(main.allocator);
         while (t.state.waitPop()) |dir| {
-            t.stack.append(dir) catch unreachable;
+            t.stack.append(main.allocator, dir) catch unreachable;
 
             while (t.stack.items.len > 0) {
                 const d = t.stack.items[t.stack.items.len - 1];

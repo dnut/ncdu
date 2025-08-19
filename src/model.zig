@@ -217,19 +217,20 @@ pub const Dir = extern struct {
         suberr: bool = false,
     };
 
-    pub fn fmtPath(self: *const @This(), withRoot: bool, out: *std.ArrayList(u8)) void {
+    pub fn fmtPath(self: *const @This(), alloc: std.mem.Allocator, withRoot: bool, out: *std.ArrayListUnmanaged(u8)) void {
         if (!withRoot and self.parent == null) return;
-        var components = std.ArrayList([:0]const u8).init(main.allocator);
-        defer components.deinit();
+        var components: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        defer components.deinit(main.allocator);
         var it: ?*const @This() = self;
         while (it) |e| : (it = e.parent)
             if (withRoot or e.parent != null)
-                components.append(e.entry.name()) catch unreachable;
+                components.append(main.allocator, e.entry.name()) catch unreachable;
 
         var i: usize = components.items.len-1;
         while (true) {
-            if (i != components.items.len-1 and !(out.items.len != 0 and out.items[out.items.len-1] == '/')) out.append('/') catch unreachable;
-            out.appendSlice(components.items[i]) catch unreachable;
+            if (i != components.items.len-1 and !(out.items.len != 0 and out.items[out.items.len-1] == '/'))
+                out.append(main.allocator, '/') catch unreachable;
+            out.appendSlice(alloc, components.items[i]) catch unreachable;
             if (i == 0) break;
             i -= 1;
         }
@@ -271,11 +272,11 @@ pub const Link = extern struct {
 
     // Return value should be freed with main.allocator.
     pub fn path(self: *const @This(), withRoot: bool) [:0]const u8 {
-        var out = std.ArrayList(u8).init(main.allocator);
-        self.parent.fmtPath(withRoot, &out);
-        out.append('/') catch unreachable;
-        out.appendSlice(self.entry.name()) catch unreachable;
-        return out.toOwnedSliceSentinel(0) catch unreachable;
+        var out: std.ArrayListUnmanaged(u8) = .empty;
+        self.parent.fmtPath(main.allocator, withRoot, &out);
+        out.append(main.allocator, '/') catch unreachable;
+        out.appendSlice(main.allocator, self.entry.name()) catch unreachable;
+        return out.toOwnedSliceSentinel(main.allocator, 0) catch unreachable;
     }
 
     // Add this link to the inodes map and mark it as 'uncounted'.
@@ -350,7 +351,7 @@ pub const Ext = extern struct {
 pub const devices = struct {
     var lock = std.Thread.Mutex{};
     // id -> dev
-    pub var list = std.ArrayList(u64).init(main.allocator);
+    pub var list: std.ArrayListUnmanaged(u64) = .empty;
     // dev -> id
     var lookup = std.AutoHashMap(u64, DevId).init(main.allocator);
 
@@ -361,7 +362,7 @@ pub const devices = struct {
         if (!d.found_existing) {
             if (list.items.len >= std.math.maxInt(DevId)) ui.die("Maximum number of device identifiers exceeded.\n", .{});
             d.value_ptr.* = @as(DevId, @intCast(list.items.len));
-            list.append(dev) catch unreachable;
+            list.append(main.allocator, dev) catch unreachable;
         }
         return d.value_ptr.*;
     }

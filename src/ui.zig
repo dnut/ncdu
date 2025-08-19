@@ -80,7 +80,7 @@ pub fn errorString(e: anyerror) [:0]const u8 {
     };
 }
 
-var to_utf8_buf = std.ArrayList(u8).init(main.allocator);
+var to_utf8_buf: std.ArrayListUnmanaged(u8) = .empty;
 
 fn toUtf8BadChar(ch: u8) bool {
     return switch (ch) {
@@ -107,19 +107,19 @@ pub fn toUtf8(in: [:0]const u8) [:0]const u8 {
         if (std.unicode.utf8ByteSequenceLength(in[i])) |cp_len| {
             if (!toUtf8BadChar(in[i]) and i + cp_len <= in.len) {
                 if (std.unicode.utf8Decode(in[i .. i + cp_len])) |_| {
-                    to_utf8_buf.appendSlice(in[i .. i + cp_len]) catch unreachable;
+                    to_utf8_buf.appendSlice(main.allocator, in[i .. i + cp_len]) catch unreachable;
                     i += cp_len;
                     continue;
                 } else |_| {}
             }
         } else |_| {}
-        to_utf8_buf.writer().print("\\x{X:0>2}", .{in[i]}) catch unreachable;
+        to_utf8_buf.writer(main.allocator).print("\\x{X:0>2}", .{in[i]}) catch unreachable;
         i += 1;
     }
-    return util.arrayListBufZ(&to_utf8_buf);
+    return util.arrayListBufZ(&to_utf8_buf, main.allocator);
 }
 
-var shorten_buf = std.ArrayList(u8).init(main.allocator);
+var shorten_buf: std.ArrayListUnmanaged(u8) = .empty;
 
 // Shorten the given string to fit in the given number of columns.
 // If the string is too long, only the prefix and suffix will be printed, with '...' in between.
@@ -150,8 +150,8 @@ pub fn shorten(in: [:0]const u8, max_width: u32) [:0] const u8 {
     if (total_width <= max_width) return in;
 
     shorten_buf.shrinkRetainingCapacity(0);
-    shorten_buf.appendSlice(in[0..prefix_end]) catch unreachable;
-    shorten_buf.appendSlice("...") catch unreachable;
+    shorten_buf.appendSlice(main.allocator, in[0..prefix_end]) catch unreachable;
+    shorten_buf.appendSlice(main.allocator, "...") catch unreachable;
 
     var start_width: u32 = prefix_width;
     var start_len: u32 = prefix_end;
@@ -163,11 +163,11 @@ pub fn shorten(in: [:0]const u8, max_width: u32) [:0] const u8 {
         start_width += cp_width;
         start_len += cp_len;
         if (total_width - start_width <= max_width - prefix_width - 3) {
-            shorten_buf.appendSlice(in[start_len..]) catch unreachable;
+            shorten_buf.appendSlice(main.allocator, in[start_len..]) catch unreachable;
             break;
         }
     }
-    return util.arrayListBufZ(&shorten_buf);
+    return util.arrayListBufZ(&shorten_buf, main.allocator);
 }
 
 fn shortenTest(in: [:0]const u8, max_width: u32, out: [:0]const u8) !void {

@@ -136,19 +136,19 @@ pub fn delete() ?*model.Entry {
         if (it.* == entry)
             break;
 
-    var path = std.ArrayList(u8).init(main.allocator);
-    defer path.deinit();
-    parent.fmtPath(true, &path);
+    var path: std.ArrayListUnmanaged(u8) = .empty;
+    defer path.deinit(main.allocator);
+    parent.fmtPath(main.allocator, true, &path);
     if (path.items.len == 0 or path.items[path.items.len-1] != '/')
-        path.append('/') catch unreachable;
-    path.appendSlice(entry.name()) catch unreachable;
+        path.append(main.allocator, '/') catch unreachable;
+    path.appendSlice(main.allocator, entry.name()) catch unreachable;
 
     if (main.config.delete_command.len == 0) {
-        _ = deleteItem(std.fs.cwd(), util.arrayListBufZ(&path), it);
+        _ = deleteItem(std.fs.cwd(), util.arrayListBufZ(&path, main.allocator), it);
         model.inodes.addAllStats();
         return if (it.* == e) e else next_sel;
     } else {
-        const isdel = deleteCmd(util.arrayListBufZ(&path), it);
+        const isdel = deleteCmd(util.arrayListBufZ(&path, main.allocator), it);
         model.inodes.addAllStats();
         return if (isdel) next_sel else it.*;
     }
@@ -197,17 +197,17 @@ fn drawConfirm() void {
 }
 
 fn drawProgress() void {
-    var path = std.ArrayList(u8).init(main.allocator);
-    defer path.deinit();
-    parent.fmtPath(false, &path);
-    path.append('/') catch unreachable;
-    path.appendSlice(entry.name()) catch unreachable;
+    var path: std.ArrayListUnmanaged(u8) = .empty;
+    defer path.deinit(main.allocator);
+    parent.fmtPath(main.allocator, false, &path);
+    path.append(main.allocator, '/') catch unreachable;
+    path.appendSlice(main.allocator, entry.name()) catch unreachable;
 
     // TODO: Item counts and progress bar would be nice.
 
     const box = ui.Box.create(6, 60, "Deleting...");
     box.move(2, 2);
-    ui.addstr(ui.shorten(ui.toUtf8(util.arrayListBufZ(&path)), 56));
+    ui.addstr(ui.shorten(ui.toUtf8(util.arrayListBufZ(&path, main.allocator)), 56));
     box.move(4, 41);
     ui.addstr("Press ");
     ui.style(.key);
@@ -217,16 +217,16 @@ fn drawProgress() void {
 }
 
 fn drawErr() void {
-    var path = std.ArrayList(u8).init(main.allocator);
-    defer path.deinit();
-    parent.fmtPath(false, &path);
-    path.append('/') catch unreachable;
-    path.appendSlice(entry.name()) catch unreachable;
+    var path: std.ArrayListUnmanaged(u8) = .empty;
+    defer path.deinit(main.allocator);
+    parent.fmtPath(main.allocator, false, &path);
+    path.append(main.allocator, '/') catch unreachable;
+    path.appendSlice(main.allocator, entry.name()) catch unreachable;
 
     const box = ui.Box.create(6, 60, "Error");
     box.move(1, 2);
     ui.addstr("Error deleting ");
-    ui.addstr(ui.shorten(ui.toUtf8(util.arrayListBufZ(&path)), 41));
+    ui.addstr(ui.shorten(ui.toUtf8(util.arrayListBufZ(&path, main.allocator)), 41));
     box.move(2, 4);
     ui.addstr(ui.errorString(error_code));
 
