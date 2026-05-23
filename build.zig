@@ -10,6 +10,8 @@ pub fn build(b: *std.Build) void {
     const pie = b.option(bool, "pie", "Build with PIE support (by default: target-dependant)");
     const strip = b.option(bool, "strip", "Strip debugging info (by default false)") orelse false;
 
+    // --- ncdu main --------------------------------------
+
     const main_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -31,27 +33,35 @@ pub fn build(b: *std.Build) void {
         // useful for package maintainers
         exe.headerpad_max_install_names = true;
     }
-    b.installArtifact(exe);
-
+    const install_exe = b.addInstallArtifact(exe, .{});
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    if (b.args) |args| run_cmd.addArgs(args);
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    // --- tests ------------------------------------------
 
     const unit_tests = b.addTest(.{
         .root_module = main_mod,
         .use_llvm = true,
     });
     unit_tests.pie = pie;
-    const install_unit_tests = b.addInstallArtifact(unit_tests, .{ .dest_sub_path = "test" });
-
+    const install_unit_tests = b.addInstallArtifact(unit_tests, .{});
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
+    // --- top level steps --------------------------------
+
+    // the default step: `zig build`
+    b.install_tls.description = "Build ncdu and copy to prefix path.";
+    b.getInstallStep().dependOn(&install_exe.step);
+
+    const run_step = b.step("run", "Run ncdu.");
+    run_step.dependOn(&install_exe.step);
+    run_step.dependOn(&run_cmd.step);
+
+    const test_step = b.step("test", "Run unit tests.");
     test_step.dependOn(&install_unit_tests.step);
+    test_step.dependOn(&run_unit_tests.step);
+
+    const all_step = b.step("all", "Build everything and copy artifacts to prefix path.");
+    all_step.dependOn(&install_exe.step);
+    all_step.dependOn(&install_unit_tests.step);
 }

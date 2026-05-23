@@ -1,0 +1,31 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libncursesw5-dev libzstd-dev
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build all installation artifacts and run the tests.
+        run: |
+          set -o pipefail
+          zig build all
+          # this piping from the test binary is necessary to output the full list of tests that ran
+          ./zig-out/bin/test 2>&1 | cat
