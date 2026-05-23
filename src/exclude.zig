@@ -63,7 +63,7 @@ const Pattern = struct {
             tail.pattern = main.allocator.dupeZ(u8, pat[0..idx]) catch unreachable;
             tail.isdir = true;
             tail.isliteral = isLiteral(tail.pattern);
-            pat = pat[idx+1..];
+            pat = pat[idx + 1 ..];
             if (std.mem.allEqual(u8, pat, '/')) return top;
 
             const next = main.allocator.create(Pattern) catch unreachable;
@@ -113,7 +113,6 @@ test "parse" {
     try std.testing.expectEqual(t4.sub.?.sub.?.sub, null);
 }
 
-
 // List of patterns to be matched at one particular level.
 // There are 2 different types of lists: those where all patterns have a
 // sub-pointer (where the pattern only matches directories at this level, and
@@ -156,7 +155,6 @@ fn PatternList(comptime withsub: bool) type {
                 if (withsub) {
                     if (pat.sub) |s| e.value_ptr.*.append(main.allocator, s) catch unreachable;
                 }
-
             } else self.wild.append(main.allocator, pat) catch unreachable;
         }
 
@@ -194,8 +192,7 @@ pub const Patterns = struct {
     isroot: bool = false,
 
     fn append(self: *Patterns, pat: *const Pattern) void {
-        if (pat.sub == null) self.nonsub.append(pat)
-        else self.sub.append(pat);
+        if (pat.sub == null) self.nonsub.append(pat) else self.sub.append(pat);
     }
 
     // Matches patterns in this level plus unanchored patterns.
@@ -237,8 +234,7 @@ var root: Patterns = .{ .isroot = true };
 pub fn addPattern(pattern: []const u8) void {
     if (pattern.len == 0) return;
     const p = Pattern.parse(pattern);
-    if (pattern[0] == '/') root.append(p)
-    else root_unanchored.append(p);
+    if (pattern[0] == '/') root.append(p) else root_unanchored.append(p);
 }
 
 // Get the patterns for the given (absolute) path, assuming the given path
@@ -252,7 +248,7 @@ pub fn getPatterns(path_: []const u8) Patterns {
     while (std.mem.indexOfScalar(u8, path, '/')) |idx| {
         const name = main.allocator.dupeZ(u8, path[0..idx]) catch unreachable;
         defer main.allocator.free(name);
-        path = path[idx+1..];
+        path = path[idx + 1 ..];
 
         const sub = pat.enter(name);
         pat.deinit();
@@ -263,7 +259,6 @@ pub fn getPatterns(path_: []const u8) Patterns {
     defer main.allocator.free(name);
     return pat.enter(name);
 }
-
 
 fn testfoo(p: *const Patterns) !void {
     try std.testing.expectEqual(p.match("root"), null);

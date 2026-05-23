@@ -28,7 +28,6 @@ pub fn setup(p: *model.Dir, e: *model.Entry, n: ?*model.Entry) void {
     confirm = .no;
 }
 
-
 // Returns true to abort scanning.
 fn err(e: anyerror) bool {
     if (main.config.ignore_delete_errors)
@@ -64,8 +63,7 @@ fn deleteItem(dir: std.fs.Dir, path: [:0]const u8, ptr: *align(1) ?*model.Entry)
         fd.close();
         dir.deleteDirZ(path) catch |e|
             return if (e != error.DirNotEmpty or d.sub.ptr == null) err(e) else false;
-    } else
-        dir.deleteFileZ(path) catch |e| return err(e);
+    } else dir.deleteFileZ(path) catch |e| return err(e);
     ptr.*.?.zeroStats(parent);
     ptr.* = ptr.*.?.next.ptr;
     return false;
@@ -83,7 +81,7 @@ fn deleteCmd(path: [:0]const u8, ptr: *align(1) ?*model.Entry) bool {
         // shell escaping.
         const cmd = std.fmt.allocPrint(main.allocator, "{s} \"$NCDU_DELETE_PATH\"", .{main.config.delete_command}) catch unreachable;
         defer main.allocator.free(cmd);
-        ui.runCmd(&.{"/bin/sh", "-c", cmd}, null, &env, true);
+        ui.runCmd(&.{ "/bin/sh", "-c", cmd }, null, &env, true);
     }
 
     const stat = scan.statAt(std.fs.cwd(), path, false, null) catch {
@@ -103,7 +101,7 @@ fn deleteCmd(path: [:0]const u8, ptr: *align(1) ?*model.Entry) bool {
         mem_sink.statToEntry(&stat, e, parent);
         ptr.* = e;
 
-        var it : ?*model.Dir = parent;
+        var it: ?*model.Dir = parent;
         while (it) |p| : (it = p.parent) {
             if (stat.etype != .link) {
                 p.entry.pack.blocks +|= e.pack.blocks;
@@ -139,7 +137,7 @@ pub fn delete() ?*model.Entry {
     var path: std.ArrayListUnmanaged(u8) = .empty;
     defer path.deinit(main.allocator);
     parent.fmtPath(main.allocator, true, &path);
-    if (path.items.len == 0 or path.items[path.items.len-1] != '/')
+    if (path.items.len == 0 or path.items[path.items.len - 1] != '/')
         path.append(main.allocator, '/') catch unreachable;
     path.appendSlice(main.allocator, entry.name()) catch unreachable;
 
@@ -190,9 +188,9 @@ fn drawConfirm() void {
     ui.style(if (confirm == .ignore) .sel else .default);
     ui.addstr("don't ask me again");
     box.move(4, switch (confirm) {
-        .yes    => 15,
-        .no     => 25,
-        .ignore => 31
+        .yes => 15,
+        .no => 25,
+        .ignore => 31,
     });
 }
 
@@ -271,7 +269,7 @@ pub fn keyInput(ch: i32) void {
                     state = .busy;
                 },
             },
-            else => {}
+            else => {},
         },
         .busy => {
             if (ch == 'q')
@@ -295,7 +293,7 @@ pub fn keyInput(ch: i32) void {
                     state = .busy;
                 },
             },
-            else => {}
+            else => {},
         },
     }
 }

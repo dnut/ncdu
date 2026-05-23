@@ -15,7 +15,6 @@ pub const global = struct {
     var writer: *Writer = undefined;
 };
 
-
 const ZstdWriter = struct {
     ctx: ?*c.ZSTD_CStream,
     out: c.ZSTD_outBuffer,
@@ -68,7 +67,7 @@ pub const Writer = struct {
     // (The 6 is because, in the worst case, every byte expands to a "\u####"
     // escape, and we do pessimistic estimates here in order to avoid checking
     // buffer lengths for each and every write operation)
-    buf: [64*1024]u8 = undefined,
+    buf: [64 * 1024]u8 = undefined,
     off: usize = 0,
     dir_entry_open: bool = false,
 
@@ -79,7 +78,7 @@ pub const Writer = struct {
         if (bytes > ctx.buf.len) ui.die("Error writing JSON export: path too long.\n", .{});
         const buf = ctx.buf[0..ctx.off];
         (if (ctx.zstd) |z| z.write(ctx.fd, buf, bytes == 0) else ctx.fd.writeAll(buf)) catch |e|
-            ui.die("Error writing to file: {s}.\n", .{ ui.errorString(e) });
+            ui.die("Error writing to file: {s}.\n", .{ui.errorString(e)});
         ctx.off = 0;
     }
 
@@ -100,20 +99,19 @@ pub const Writer = struct {
     // Write escaped string contents, excluding the quotes.
     fn writeStr(ctx: *Writer, s: []const u8) void {
         for (s) |b| {
-            if (b >= 0x20 and b != '"' and b != '\\' and b != 127) ctx.writeByte(b)
-            else switch (b) {
+            if (b >= 0x20 and b != '"' and b != '\\' and b != 127) ctx.writeByte(b) else switch (b) {
                 '\n' => ctx.write("\\n"),
                 '\r' => ctx.write("\\r"),
-                0x8  => ctx.write("\\b"),
+                0x8 => ctx.write("\\b"),
                 '\t' => ctx.write("\\t"),
-                0xC  => ctx.write("\\f"),
+                0xC => ctx.write("\\f"),
                 '\\' => ctx.write("\\\\"),
-                '"'  => ctx.write("\\\""),
+                '"' => ctx.write("\\\""),
                 else => {
                     ctx.write("\\u00");
                     const hexdig = "0123456789abcdef";
-                    ctx.writeByte(hexdig[b>>4]);
-                    ctx.writeByte(hexdig[b&0xf]);
+                    ctx.writeByte(hexdig[b >> 4]);
+                    ctx.writeByte(hexdig[b & 0xf]);
                 },
             }
         }
@@ -163,7 +161,7 @@ pub const Writer = struct {
 
     fn writeSpecial(ctx: *Writer, name: []const u8, t: model.EType) void {
         ctx.closeDirEntry(false);
-        ctx.ensureSpace(name.len*6 + 1000);
+        ctx.ensureSpace(name.len * 6 + 1000);
         ctx.write(if (t.isDirectory()) ",\n[{\"name\":\"" else ",\n{\"name\":\"");
         ctx.writeStr(name);
         ctx.write(switch (t) {
@@ -177,7 +175,7 @@ pub const Writer = struct {
     }
 
     fn writeStat(ctx: *Writer, name: []const u8, stat: *const sink.Stat, parent_dev: u64) void {
-        ctx.ensureSpace(name.len*6 + 1000);
+        ctx.ensureSpace(name.len * 6 + 1000);
         ctx.write(if (stat.etype == .dir) ",\n[{\"name\":\"" else ",\n{\"name\":\"");
         ctx.writeStr(name);
         ctx.writeByte('"');
@@ -253,7 +251,7 @@ pub const Dir = struct {
 };
 
 pub fn createRoot(path: []const u8, stat: *const sink.Stat) Dir {
-    var root = Dir{.dev=0};
+    var root = Dir{ .dev = 0 };
     return root.addDir(path, stat);
 }
 

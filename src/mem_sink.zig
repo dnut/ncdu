@@ -6,7 +6,6 @@ const main = @import("main.zig");
 const model = @import("model.zig");
 const sink = @import("sink.zig");
 
-
 pub const global = struct {
     pub var root: ?*model.Dir = null;
     pub var stats: bool = true; // calculate aggregate directory stats
@@ -142,8 +141,7 @@ pub const Dir = struct {
         if (self.entries.count() > 0) {
             var it = &self.dir.sub.ptr;
             while (it.*) |e| {
-                if (self.entries.getKey(e) == e) it.* = e.next.ptr
-                else it = &e.next.ptr;
+                if (self.entries.getKey(e) == e) it.* = e.next.ptr else it = &e.next.ptr;
             }
         }
         self.entries.deinit();

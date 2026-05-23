@@ -15,10 +15,12 @@ fn toStat(e: *model.Entry) sink.Stat {
         .etype = e.pack.etype,
         .blocks = e.pack.blocks,
         .size = e.size,
-        .dev =
-            if (e.dir()) |d| model.devices.list.items[d.pack.dev]
-            else if (el) |l| model.devices.list.items[l.parent.pack.dev]
-            else undefined,
+        .dev = if (e.dir()) |d|
+            model.devices.list.items[d.pack.dev]
+        else if (el) |l|
+            model.devices.list.items[l.parent.pack.dev]
+        else
+            undefined,
         .ino = if (el) |l| l.ino else undefined,
         .nlink = if (el) |l| l.pack.nlink else 1,
         .ext = if (e.ext()) |x| x.* else .{},
@@ -29,7 +31,6 @@ const Ctx = struct {
     sink: *sink.Thread,
     stat: sink.Stat,
 };
-
 
 fn rec(ctx: *Ctx, dir: *sink.Dir, entry: *model.Entry) void {
     if ((ctx.sink.files_seen.load(.monotonic) & 65) == 0)
@@ -51,7 +52,6 @@ fn rec(ctx: *Ctx, dir: *sink.Dir, entry: *model.Entry) void {
         else => dir.addSpecial(ctx.sink, entry.name(), entry.pack.etype),
     }
 }
-
 
 pub fn run(d: *model.Dir) void {
     const sink_threads = sink.createThreads(1);

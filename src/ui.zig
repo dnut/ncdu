@@ -85,7 +85,7 @@ var to_utf8_buf: std.ArrayListUnmanaged(u8) = .empty;
 fn toUtf8BadChar(ch: u8) bool {
     return switch (ch) {
         0...0x1F, 0x7F => true,
-        else => false
+        else => false,
     };
 }
 
@@ -126,7 +126,7 @@ var shorten_buf: std.ArrayListUnmanaged(u8) = .empty;
 // Input is assumed to be valid UTF-8.
 // Return value points to the input string or to an internal buffer that is
 // invalidated on a subsequent call.
-pub fn shorten(in: [:0]const u8, max_width: u32) [:0] const u8 {
+pub fn shorten(in: [:0]const u8, max_width: u32) [:0]const u8 {
     if (max_width < 4) return "...";
     var total_width: u32 = 0;
     var prefix_width: u32 = 0;
@@ -141,11 +141,10 @@ pub fn shorten(in: [:0]const u8, max_width: u32) [:0] const u8 {
         const cp_width: u32 = @intCast(if (cp_width_ < 0) 0 else cp_width_);
         const cp_len = std.unicode.utf8CodepointSequenceLength(cp) catch unreachable;
         total_width += cp_width;
-        if (!prefix_done and prefix_width + cp_width <= @divFloor(max_width-1, 2)-1) {
+        if (!prefix_done and prefix_width + cp_width <= @divFloor(max_width - 1, 2) - 1) {
             prefix_width += cp_width;
             prefix_end += cp_len;
-        } else
-            prefix_done = true;
+        } else prefix_done = true;
     }
     if (total_width <= max_width) return in;
 
@@ -208,6 +207,7 @@ const StyleDef = struct {
     }
 };
 
+// zig fmt: off
 const styles = [_]StyleDef{
     .{  .name   = "default",
         .off    = .{ .fg = -1,              .bg = -1,             .attr = 0 },
@@ -278,6 +278,7 @@ const styles = [_]StyleDef{
         .dark   = .{ .fg = c.COLOR_MAGENTA, .bg = c.COLOR_GREEN,  .attr = 0 },
         .darkbg = .{ .fg = c.COLOR_MAGENTA, .bg = c.COLOR_GREEN,  .attr = 0 } },
 };
+// zig fmt: on
 
 pub const Style = lbl: {
     var fields: [styles.len]std.builtin.Type.EnumField = undefined;
@@ -287,41 +288,39 @@ pub const Style = lbl: {
             .value = i,
         };
     }
-    break :lbl @Type(.{
-        .@"enum" = .{
-            .tag_type = u8,
-            .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_exhaustive = true,
-        }
-    });
+    break :lbl @Type(.{ .@"enum" = .{
+        .tag_type = u8,
+        .fields = &fields,
+        .decls = &[_]std.builtin.Type.Declaration{},
+        .is_exhaustive = true,
+    } });
 };
 
 const ui = @This();
 
 pub const Bg = enum {
-    default, hd, sel,
+    default,
+    hd,
+    sel,
 
     // Set the style to the selected bg combined with the given fg.
     pub fn fg(self: @This(), s: Style) void {
         ui.style(switch (self) {
             .default => s,
-            .hd =>
-                switch (s) {
-                    .default => Style.hd,
-                    .key => Style.key_hd,
-                    .num => Style.num_hd,
-                    else => unreachable,
-                },
-            .sel =>
-                switch (s) {
-                    .default => Style.sel,
-                    .num => Style.num_sel,
-                    .dir => Style.dir_sel,
-                    .flag => Style.flag_sel,
-                    .graph => Style.graph_sel,
-                    else => unreachable,
-                }
+            .hd => switch (s) {
+                .default => Style.hd,
+                .key => Style.key_hd,
+                .num => Style.num_hd,
+                else => unreachable,
+            },
+            .sel => switch (s) {
+                .default => Style.sel,
+                .num => Style.num_sel,
+                .dir => Style.dir_sel,
+                .flag => Style.flag_sel,
+                .graph => Style.graph_sel,
+                else => unreachable,
+            },
         });
     }
 };
@@ -343,7 +342,7 @@ pub fn init() void {
     clearScr();
     if (main.config.nc_tty) {
         const tty = c.fopen("/dev/tty", "r+");
-        if (tty == null) die("Error opening /dev/tty: {s}.\n", .{ c.strerror(@intFromEnum(std.posix.errno(-1))) });
+        if (tty == null) die("Error opening /dev/tty: {s}.\n", .{c.strerror(@intFromEnum(std.posix.errno(-1)))});
         const term = c.newterm(null, tty, tty);
         if (term == null) die("Error initializing ncurses.\n", .{});
         _ = c.set_term(term);
@@ -358,8 +357,8 @@ pub fn init() void {
 
     _ = c.start_color();
     _ = c.use_default_colors();
-    for (styles, 0..) |s, i| _ = c.init_pair(@as(i16, @intCast(i+1)), s.style().fg, s.style().bg);
-    _ = c.bkgd(@intCast(c.COLOR_PAIR(@intFromEnum(Style.default)+1)));
+    for (styles, 0..) |s, i| _ = c.init_pair(@as(i16, @intCast(i + 1)), s.style().fg, s.style().bg);
+    _ = c.bkgd(@intCast(c.COLOR_PAIR(@intFromEnum(Style.default) + 1)));
     inited = true;
 }
 
@@ -375,7 +374,7 @@ pub fn deinit() void {
 }
 
 pub fn style(s: Style) void {
-    _ = c.attr_set(styles[@intFromEnum(s)].style().attr, @intFromEnum(s)+1, null);
+    _ = c.attr_set(styles[@intFromEnum(s)].style().attr, @intFromEnum(s) + 1, null);
 }
 
 pub fn move(y: u32, x: u32) void {
@@ -411,30 +410,31 @@ pub const FmtSize = struct {
     fn init(u: [:0]const u8, n: u64, mul: u64, div: u64) FmtSize {
         return .{
             .unit = u,
-            .buf = util.fmt5dec(@intCast( ((n*mul) +| (div / 2)) / div )),
+            .buf = util.fmt5dec(@intCast(((n * mul) +| (div / 2)) / div)),
         };
     }
 
     pub fn fmt(v: u64) FmtSize {
-        if (main.config.si) {
-            if      (v < 1000)                    { return FmtSize.init("  B", v, 10, 1); }
-            else if (v < 999_950)                 { return FmtSize.init(" kB", v, 1, 100); }
-            else if (v < 999_950_000)             { return FmtSize.init(" MB", v, 1, 100_000); }
-            else if (v < 999_950_000_000)         { return FmtSize.init(" GB", v, 1, 100_000_000); }
-            else if (v < 999_950_000_000_000)     { return FmtSize.init(" TB", v, 1, 100_000_000_000); }
-            else if (v < 999_950_000_000_000_000) { return FmtSize.init(" PB", v, 1, 100_000_000_000_000); }
-            else                                  { return FmtSize.init(" EB", v, 1, 100_000_000_000_000_000); }
-        } else {
+        // zig fmt: off
+        return if (main.config.si)
+            if      (v < 1000)                    .init("  B", v, 10, 1)
+            else if (v < 999_950)                 .init(" kB", v, 1, 100)
+            else if (v < 999_950_000)             .init(" MB", v, 1, 100_000)
+            else if (v < 999_950_000_000)         .init(" GB", v, 1, 100_000_000)
+            else if (v < 999_950_000_000_000)     .init(" TB", v, 1, 100_000_000_000)
+            else if (v < 999_950_000_000_000_000) .init(" PB", v, 1, 100_000_000_000_000)
+            else                                  .init(" EB", v, 1, 100_000_000_000_000_000)
+        else
             // Cutoff values are obtained by calculating 999.949999999999999999999999 * div with an infinite-precision calculator.
             // (Admittedly, this precision is silly)
-            if (v < 1000)                     { return FmtSize.init("   B", v, 10, 1); }
-            else if (v < 1023949)             { return FmtSize.init(" KiB", v, 10, 1<<10); }
-            else if (v < 1048523572)          { return FmtSize.init(" MiB", v, 10, 1<<20); }
-            else if (v < 1073688136909)       { return FmtSize.init(" GiB", v, 10, 1<<30); }
-            else if (v < 1099456652194612)    { return FmtSize.init(" TiB", v, 10, 1<<40); }
-            else if (v < 1125843611847281869) { return FmtSize.init(" PiB", v, 10, 1<<50); }
-            else                              { return FmtSize.init(" EiB", v, 1, (1<<60)/10); }
-        }
+            if (v < 1000)                     .init("   B", v, 10, 1)
+            else if (v < 1023949)             .init(" KiB", v, 10, 1<<10)
+            else if (v < 1048523572)          .init(" MiB", v, 10, 1<<20)
+            else if (v < 1073688136909)       .init(" GiB", v, 10, 1<<30)
+            else if (v < 1099456652194612)    .init(" TiB", v, 10, 1<<40)
+            else if (v < 1125843611847281869) .init(" PiB", v, 10, 1<<50)
+            else                              .init(" EiB", v, 1, (1<<60)/10);
+        // zig fmt: on
     }
 
     pub fn num(self: *const FmtSize) [:0]const u8 {
@@ -448,6 +448,7 @@ pub const FmtSize = struct {
 };
 
 test "fmtsize" {
+    // zig fmt: off
     main.config.si = true;
     try FmtSize.fmt(            0).testEql("  0.0  B");
     try FmtSize.fmt(          999).testEql("999.0  B");
@@ -483,6 +484,7 @@ test "fmtsize" {
     try FmtSize.fmt(1125843611847281868).testEql("999.9 PiB");
     try FmtSize.fmt(1125843611847281869).testEql("  1.0 EiB");
     try FmtSize.fmt(std.math.maxInt(u64)).testEql(" 16.0 EiB");
+    // zig fmt: on
 }
 
 // Print a formatted human-readable size string onto the given background.
@@ -521,23 +523,23 @@ pub fn addnum(bg: Bg, v: u64) void {
 // Print a file mode, takes 10 columns
 pub fn addmode(mode: u32) void {
     addch(switch (mode & std.posix.S.IFMT) {
-        std.posix.S.IFDIR  => 'd',
-        std.posix.S.IFREG  => '-',
-        std.posix.S.IFLNK  => 'l',
-        std.posix.S.IFIFO  => 'p',
+        std.posix.S.IFDIR => 'd',
+        std.posix.S.IFREG => '-',
+        std.posix.S.IFLNK => 'l',
+        std.posix.S.IFIFO => 'p',
         std.posix.S.IFSOCK => 's',
-        std.posix.S.IFCHR  => 'c',
-        std.posix.S.IFBLK  => 'b',
-        else => '?'
+        std.posix.S.IFCHR => 'c',
+        std.posix.S.IFBLK => 'b',
+        else => '?',
     });
-    addch(if (mode &  0o400 > 0) 'r' else '-');
-    addch(if (mode &  0o200 > 0) 'w' else '-');
+    addch(if (mode & 0o400 > 0) 'r' else '-');
+    addch(if (mode & 0o200 > 0) 'w' else '-');
     addch(if (mode & 0o4000 > 0) 's' else if (mode & 0o100 > 0) @as(u7, 'x') else '-');
-    addch(if (mode &  0o040 > 0) 'r' else '-');
-    addch(if (mode &  0o020 > 0) 'w' else '-');
+    addch(if (mode & 0o040 > 0) 'r' else '-');
+    addch(if (mode & 0o020 > 0) 'w' else '-');
     addch(if (mode & 0o2000 > 0) 's' else if (mode & 0o010 > 0) @as(u7, 'x') else '-');
-    addch(if (mode &  0o004 > 0) 'r' else '-');
-    addch(if (mode &  0o002 > 0) 'w' else '-');
+    addch(if (mode & 0o004 > 0) 'r' else '-');
+    addch(if (mode & 0o002 > 0) 'w' else '-');
     addch(if (mode & 0o1000 > 0) (if (std.posix.S.ISDIR(mode)) @as(u7, 't') else 'T') else if (mode & 0o001 > 0) @as(u7, 'x') else '-');
 }
 
@@ -548,7 +550,7 @@ pub fn addts(bg: Bg, ts: u64) void {
     const len = c.strftime(&buf, buf.len, "%Y-%m-%d %H:%M:%S %z", c.localtime(&t));
     if (len > 0) {
         bg.fg(.num);
-        ui.addstr(buf[0..len:0]);
+        ui.addstr(buf[0..len :0]);
     } else {
         bg.fg(.default);
         ui.addstr("            invalid mtime");
@@ -568,8 +570,8 @@ pub const Box = struct {
 
     pub fn create(height: u32, width: u32, title: [:0]const u8) Self {
         const s = Self{
-            .start_row = (rows>>1) -| (height>>1),
-            .start_col = (cols>>1) -| (width>>1),
+            .start_row = (rows >> 1) -| (height >> 1),
+            .start_col = (cols >> 1) -| (width >> 1),
         };
         style(.default);
         if (width < 6 or height < 3) return s;
@@ -585,10 +587,10 @@ pub const Box = struct {
         var i: u32 = 0;
         while (i < height) : (i += 1) {
             s.move(i, 0);
-            addch(if (i == 0) ulcorner else if (i == height-1) llcorner else acs_vline);
-            hline(if (i == 0 or i == height-1) acs_hline else ' ', width-2);
-            s.move(i, width-1);
-            addch(if (i == 0) urcorner else if (i == height-1) lrcorner else acs_vline);
+            addch(if (i == 0) ulcorner else if (i == height - 1) llcorner else acs_vline);
+            hline(if (i == 0 or i == height - 1) acs_hline else ' ', width - 2);
+            s.move(i, width - 1);
+            addch(if (i == 0) urcorner else if (i == height - 1) lrcorner else acs_vline);
         }
 
         s.move(0, 3);
@@ -633,13 +635,12 @@ pub fn getch(block: bool) i32 {
         }
         if (ch == c.ERR) {
             if (!block) return 0;
-            sleep(10*std.time.ns_per_ms);
+            sleep(10 * std.time.ns_per_ms);
             continue;
         }
         return ch;
     }
-    die("Error reading keyboard input, assuming TTY has been lost.\n(Potentially nonsensical error message: {s})\n",
-        .{ c.strerror(@intFromEnum(std.posix.errno(-1))) });
+    die("Error reading keyboard input, assuming TTY has been lost.\n(Potentially nonsensical error message: {s})\n", .{c.strerror(@intFromEnum(std.posix.errno(-1)))});
 }
 
 fn waitInput() void {
@@ -659,9 +660,9 @@ pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMa
     // NCDU_LEVEL can only count to 9, keeps the implementation simple.
     if (env.get("NCDU_LEVEL")) |l|
         env.put("NCDU_LEVEL", if (l.len == 0) "1" else switch (l[0]) {
-            '0'...'8' => |d| &[1] u8{d+1},
+            '0'...'8' => |d| &[1]u8{d + 1},
             '9' => "9",
-            else => "1"
+            else => "1",
         }) catch unreachable
     else
         env.put("NCDU_LEVEL", "1") catch unreachable;
@@ -671,18 +672,20 @@ pub fn runCmd(cmd: []const []const u8, cwd: ?[]const u8, env: *std.process.EnvMa
     child.env_map = env;
 
     const term = child.spawnAndWait() catch |e| blk: {
-        std.debug.print("Error running command: {s}\n\nPress enter to continue.\n", .{ ui.errorString(e) });
+        std.debug.print("Error running command: {s}\n\nPress enter to continue.\n", .{ui.errorString(e)});
         waitInput();
         break :blk std.process.Child.Term{ .Exited = 0 };
     };
 
     const n = switch (term) {
-        .Exited  => "error",
-        .Signal  => "signal",
+        .Exited => "error",
+        .Signal => "signal",
         .Stopped => "stopped",
         .Unknown => "unknown",
     };
-    const v = switch (term) { inline else => |v| v };
+    const v = switch (term) {
+        inline else => |v| v,
+    };
     if (term != .Exited or (reporterr and v != 0)) {
         std.debug.print("\nCommand returned with {s} code {}.\nPress enter to continue.\n", .{ n, v });
         waitInput();

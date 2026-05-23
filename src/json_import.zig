@@ -9,7 +9,6 @@ const sink = @import("sink.zig");
 const ui = @import("ui.zig");
 const c = @import("c.zig").c;
 
-
 const ZstdReader = struct {
     ctx: ?*c.ZSTD_DStream,
     in: c.ZSTD_inBuffer,
@@ -56,7 +55,6 @@ const ZstdReader = struct {
     }
 };
 
-
 // Using a custom JSON parser here because, while std.json is great, it does
 // perform strict UTF-8 validation. Which is correct, of course, but ncdu dumps
 // are not always correct JSON as they may contain non-UTF-8 paths encoded as
@@ -69,7 +67,7 @@ const Parser = struct {
     rdsize: usize = 0,
     byte: u64 = 1,
     line: u64 = 1,
-    buf: [129*1024]u8 = undefined,
+    buf: [129 * 1024]u8 = undefined,
 
     fn die(p: *Parser, str: []const u8) noreturn {
         ui.die("Error importing file on line {}:{}: {s}.\n", .{ p.line, p.byte, str });
@@ -140,29 +138,56 @@ const Parser = struct {
             switch (b) {
                 '"' => break,
                 '\\' => switch (p.nextByte()) {
-                    '"' => if (n < buf.len) { buf[n] = '"'; n += 1; },
-                    '\\'=> if (n < buf.len) { buf[n] = '\\';n += 1; },
-                    '/' => if (n < buf.len) { buf[n] = '/'; n += 1; },
-                    'b' => if (n < buf.len) { buf[n] = 0x8; n += 1; },
-                    'f' => if (n < buf.len) { buf[n] = 0xc; n += 1; },
-                    'n' => if (n < buf.len) { buf[n] = 0xa; n += 1; },
-                    'r' => if (n < buf.len) { buf[n] = 0xd; n += 1; },
-                    't' => if (n < buf.len) { buf[n] = 0x9; n += 1; },
+                    '"' => if (n < buf.len) {
+                        buf[n] = '"';
+                        n += 1;
+                    },
+                    '\\' => if (n < buf.len) {
+                        buf[n] = '\\';
+                        n += 1;
+                    },
+                    '/' => if (n < buf.len) {
+                        buf[n] = '/';
+                        n += 1;
+                    },
+                    'b' => if (n < buf.len) {
+                        buf[n] = 0x8;
+                        n += 1;
+                    },
+                    'f' => if (n < buf.len) {
+                        buf[n] = 0xc;
+                        n += 1;
+                    },
+                    'n' => if (n < buf.len) {
+                        buf[n] = 0xa;
+                        n += 1;
+                    },
+                    'r' => if (n < buf.len) {
+                        buf[n] = 0xd;
+                        n += 1;
+                    },
+                    't' => if (n < buf.len) {
+                        buf[n] = 0x9;
+                        n += 1;
+                    },
                     'u' => {
-                        const first = (p.hexdig()<<12) + (p.hexdig()<<8) + (p.hexdig()<<4) + p.hexdig();
+                        const first = (p.hexdig() << 12) + (p.hexdig() << 8) + (p.hexdig() << 4) + p.hexdig();
                         var unit = @as(u21, first);
                         if (std.unicode.utf16IsLowSurrogate(first)) p.die("Unexpected low surrogate");
                         if (std.unicode.utf16IsHighSurrogate(first)) {
                             p.expectLit("\\u");
-                            const second = (p.hexdig()<<12) + (p.hexdig()<<8) + (p.hexdig()<<4) + p.hexdig();
-                            unit = std.unicode.utf16DecodeSurrogatePair(&.{first, second}) catch p.die("Invalid low surrogate");
+                            const second = (p.hexdig() << 12) + (p.hexdig() << 8) + (p.hexdig() << 4) + p.hexdig();
+                            unit = std.unicode.utf16DecodeSurrogatePair(&.{ first, second }) catch p.die("Invalid low surrogate");
                         }
                         if (n + 6 < buf.len)
-                            n += std.unicode.utf8Encode(unit, buf[n..n+5]) catch unreachable;
+                            n += std.unicode.utf8Encode(unit, buf[n .. n + 5]) catch unreachable;
                     },
                     else => p.die("invalid escape sequence"),
                 },
-                0x20, 0x21, 0x23...0x5b, 0x5d...0xff => if (n < buf.len) { buf[n] = b; n += 1; },
+                0x20, 0x21, 0x23...0x5b, 0x5d...0xff => if (n < buf.len) {
+                    buf[n] = b;
+                    n += 1;
+                },
                 else => p.die("invalid character in string"),
             }
             b = p.nextByte();
@@ -215,8 +240,14 @@ const Parser = struct {
 
     fn boolean(p: *Parser) bool {
         switch (p.nextChr()) {
-            't' => { p.expectLit("rue"); return true; },
-            'f' => { p.expectLit("alse"); return false; },
+            't' => {
+                p.expectLit("rue");
+                return true;
+            },
+            'f' => {
+                p.expectLit("alse");
+                return false;
+            },
             else => p.die("expected boolean"),
         }
     }
@@ -264,11 +295,11 @@ const Parser = struct {
             'f' => p.expectLit("alse"),
             'n' => p.expectLit("ull"),
             '-', '0'...'9' =>
-                // Numbers are kind of annoying, this "parsing" is invalid and ultra-lazy.
-                while (true) switch (p.nextByte()) {
-                    '-', '+', 'e', 'E', '.', '0'...'9' => {},
-                    else => |b| return p.undoNextByte(b),
-                },
+            // Numbers are kind of annoying, this "parsing" is invalid and ultra-lazy.
+            while (true) switch (p.nextByte()) {
+                '-', '+', 'e', 'E', '.', '0'...'9' => {},
+                else => |b| return p.undoNextByte(b),
+            },
             '"' => _ = p.stringContent(&[0]u8{}),
             '[' => {
                 var first = true;
@@ -297,7 +328,6 @@ const Parser = struct {
     }
 };
 
-
 // Should really add some invalid JSON test cases as well, but I'd first like
 // to benchmark the performance impact of using error returns instead of
 // calling ui.die().
@@ -314,7 +344,7 @@ test "JSON parser" {
         \\  "encString": "\"\\\/\b\f\n\uBe3F",
         \\  "numbers": [0,1,20,-300, 3.4 ,0e-10  , -100.023e+13 ]
         \\}
-        ;
+    ;
     var p = Parser{ .rd = undefined, .rdsize = json.len };
     @memcpy(p.buf[0..json.len], json);
     p.skip();
@@ -359,20 +389,18 @@ test "JSON parser" {
     try std.testing.expect(p.key(true, &buf) == null);
 }
 
-
 const Ctx = struct {
     p: *Parser,
     sink: *sink.Thread,
     stat: sink.Stat = .{},
     rderr: bool = false,
     namelen: usize = 0,
-    namebuf: [32*1024]u8 = undefined,
+    namebuf: [32 * 1024]u8 = undefined,
 };
-
 
 fn itemkey(ctx: *Ctx, key: []const u8) void {
     const eq = std.mem.eql;
-    switch (if (key.len > 0) key[0] else @as(u8,0)) {
+    switch (if (key.len > 0) key[0] else @as(u8, 0)) {
         'a' => {
             if (eq(u8, key, "asize")) {
                 ctx.stat.size = ctx.p.uint(u64);
@@ -381,7 +409,7 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
         },
         'd' => {
             if (eq(u8, key, "dsize")) {
-                ctx.stat.blocks = @intCast(ctx.p.uint(u64)>>9);
+                ctx.stat.blocks = @intCast(ctx.p.uint(u64) >> 9);
                 return;
             }
             if (eq(u8, key, "dev")) {
@@ -395,9 +423,7 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
                 const typ = ctx.p.string(&buf);
                 // "frmlnk" is also possible, but currently considered equivalent to "pattern".
                 ctx.stat.etype =
-                    if (eq(u8, typ, "otherfs") or eq(u8, typ, "othfs")) .otherfs
-                    else if (eq(u8, typ, "kernfs")) .kernfs
-                    else .pattern;
+                    if (eq(u8, typ, "otherfs") or eq(u8, typ, "othfs")) .otherfs else if (eq(u8, typ, "kernfs")) .kernfs else .pattern;
                 return;
             }
         },
@@ -431,11 +457,10 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
                 ctx.stat.ext.pack.hasmtime = true;
                 // Accept decimal numbers, but discard the fractional part because our data model doesn't support it.
                 switch (ctx.p.nextByte()) {
-                    '.' =>
-                        while (true) switch (ctx.p.nextByte()) {
-                            '0'...'9' => {},
-                            else => |b| return ctx.p.undoNextByte(b),
-                        },
+                    '.' => while (true) switch (ctx.p.nextByte()) {
+                        '0'...'9' => {},
+                        else => |b| return ctx.p.undoNextByte(b),
+                    },
                     else => |b| return ctx.p.undoNextByte(b),
                 }
             }
@@ -444,7 +469,7 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
             if (eq(u8, key, "name")) {
                 if (ctx.namelen != 0) ctx.p.die("duplicate key");
                 ctx.namelen = ctx.p.string(&ctx.namebuf).len;
-                if (ctx.namelen > ctx.namebuf.len-5) ctx.p.die("too long file name");
+                if (ctx.namelen > ctx.namebuf.len - 5) ctx.p.die("too long file name");
                 return;
             }
             if (eq(u8, key, "nlink")) {
@@ -461,8 +486,7 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
         'r' => {
             if (eq(u8, key, "read_error")) {
                 if (ctx.p.boolean()) {
-                    if (ctx.stat.etype == .dir) ctx.rderr = true
-                    else ctx.stat.etype = .err;
+                    if (ctx.stat.etype == .dir) ctx.rderr = true else ctx.stat.etype = .err;
                 }
                 return;
             }
@@ -478,7 +502,6 @@ fn itemkey(ctx: *Ctx, key: []const u8) void {
     }
     ctx.p.skip();
 }
-
 
 fn item(ctx: *Ctx, parent: ?*sink.Dir, dev: u64) void {
     ctx.stat = .{ .dev = dev };
@@ -507,14 +530,12 @@ fn item(ctx: *Ctx, parent: ?*sink.Dir, dev: u64) void {
     if (ctx.stat.etype == .dir) {
         const ndev = ctx.stat.dev;
         const dir =
-            if (parent) |d| d.addDir(ctx.sink, name, &ctx.stat)
-            else sink.createRoot(name, &ctx.stat);
+            if (parent) |d| d.addDir(ctx.sink, name, &ctx.stat) else sink.createRoot(name, &ctx.stat);
         ctx.sink.setDir(dir);
         if (ctx.rderr) dir.setReadError(ctx.sink);
         while (ctx.p.elem(false)) item(ctx, dir, ndev);
         ctx.sink.setDir(parent);
         dir.unref(ctx.sink);
-
     } else {
         if (@intFromEnum(ctx.stat.etype) < 0)
             parent.?.addSpecial(ctx.sink, name, ctx.stat.etype)
@@ -527,12 +548,11 @@ fn item(ctx: *Ctx, parent: ?*sink.Dir, dev: u64) void {
         main.handleEvent(false, false);
 }
 
-
 pub fn import(fd: std.fs.File, head: []const u8) void {
     const sink_threads = sink.createThreads(1);
     defer sink.done();
 
-    var p = Parser{.rd = fd};
+    var p = Parser{ .rd = fd };
     defer if (p.zstd) |z| z.destroy();
 
     if (head.len >= 4 and std.mem.eql(u8, head[0..4], "\x28\xb5\x2f\xfd")) {
@@ -553,7 +573,7 @@ pub fn import(fd: std.fs.File, head: []const u8) void {
 
     // Items
     if (!p.elem(false)) p.die("expected array element");
-    var ctx = Ctx{.p = &p, .sink = &sink_threads[0]};
+    var ctx = Ctx{ .p = &p, .sink = &sink_threads[0] };
     item(&ctx, null, 0);
 
     // accept more trailing elements
