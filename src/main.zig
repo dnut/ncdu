@@ -20,23 +20,25 @@ const util = @import("util.zig");
 const exclude = @import("exclude.zig");
 const c = @import("c.zig").c;
 
-test "imports" {
-    _ = model;
-    _ = scan;
-    _ = json_import;
-    _ = json_export;
-    _ = bin_export;
-    _ = bin_reader;
-    _ = sink;
-    _ = mem_src;
-    _ = mem_sink;
-    _ = ui;
-    _ = browser;
-    _ = delete;
-    _ = util;
-    _ = exclude;
+comptime {
+    if (@import("builtin").is_test) {
+        _ = model;
+        _ = scan;
+        _ = json_import;
+        _ = json_export;
+        _ = bin_export;
+        _ = bin_reader;
+        _ = sink;
+        _ = mem_src;
+        _ = mem_sink;
+        _ = ui;
+        _ = browser;
+        _ = delete;
+        _ = util;
+        _ = exclude;
+        _ = &main;
+    }
 }
-
 // "Custom" allocator that wraps the libc allocator and calls ui.oom() on error.
 // This allocator never returns an error, it either succeeds or causes ncdu to quit.
 // (Which means you'll find a lot of "catch unreachable" sprinkled through the code,
