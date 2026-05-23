@@ -47,9 +47,11 @@ pub fn build(b: *std.Build) void {
         .use_llvm = true,
     });
     unit_tests.pie = pie;
+    const install_unit_tests = b.addInstallArtifact(unit_tests, .{ .dest_sub_path = "test" });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+    test_step.dependOn(&install_unit_tests.step);
 }
