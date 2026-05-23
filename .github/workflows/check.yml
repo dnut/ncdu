@@ -23,9 +23,20 @@ jobs:
         with:
           version: 0.15.2
 
+      - name: Set up kcov
+        run: |
+          curl -L https://github.com/Syndica/kcov/releases/download/v43-bin/kcov-v43-bin-linux-x86_64.tar.gz | tar xz
+          echo "$PWD/kcov-v43-bin-linux-x86_64/bin" >> "$GITHUB_PATH"
+
       - name: Build all installation artifacts and run the tests.
         run: |
           set -o pipefail
           zig build all
           # this piping from the test binary is necessary to output the full list of tests that ran
-          ./zig-out/bin/test 2>&1 | cat
+          kcov --include-pattern=src kcov-out ./zig-out/bin/test 2>&1 | cat
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: dnut/ncdu
