@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "ncdu",
         .root_module = main_mod,
+        .use_llvm = true,
     });
     exe.pie = pie;
     // https://github.com/ziglang/zig/blob/faccd79ca5debbe22fe168193b8de54393257604/build.zig#L745-L748
@@ -43,6 +44,7 @@ pub fn build(b: *std.Build) void {
 
     const unit_tests = b.addTest(.{
         .root_module = main_mod,
+        .use_llvm = true,
     });
     unit_tests.pie = pie;
 
